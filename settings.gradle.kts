@@ -1,5 +1,7 @@
 rootProject.name = "HolyPresenter-Bible"
 
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+
 pluginManagement {
     repositories {
         google {
@@ -9,8 +11,10 @@ pluginManagement {
                 includeGroupAndSubgroups("com.google")
             }
         }
+
         mavenCentral()
         gradlePluginPortal()
+        mavenLocal()
     }
 }
 
@@ -23,7 +27,9 @@ dependencyResolutionManagement {
                 includeGroupAndSubgroups("com.google")
             }
         }
+
         mavenCentral()
+        mavenLocal()
     }
 }
 
@@ -32,4 +38,3 @@ plugins {
 }
 
 include(":desktopApp")
-include(":shared")
