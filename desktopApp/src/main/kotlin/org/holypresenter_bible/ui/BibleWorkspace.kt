@@ -12,6 +12,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.isShiftPressed
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -53,6 +55,10 @@ fun BibleWorkspace(
         mutableStateOf(false)
     }
 
+    var verseSelection by remember {
+        mutableStateOf<BibleVerseSelection?>(null)
+    }
+
     Surface(
         modifier = modifier.fillMaxSize()
     ) {
@@ -69,6 +75,7 @@ fun BibleWorkspace(
                     selectedTranslation = translation
                     selectedBook = null
                     selectedChapter = null
+                    verseSelection = null
                     showBooks = true
                     showChapters = false
                 }
@@ -121,10 +128,13 @@ fun BibleWorkspace(
                         onBookSelected = { book ->
                             selectedBook = book
                             selectedChapter = null
+                            verseSelection = null
                             showBooks = false
                             showChapters = true
                         },
-                        modifier = Modifier.fillMaxWidth().weight(1f)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
                     )
                 }
 
@@ -134,10 +144,13 @@ fun BibleWorkspace(
                         selectedChapter = selectedChapter,
                         onChapterSelected = { chapter ->
                             selectedChapter = chapter
+                            verseSelection = null
                             showBooks = false
                             showChapters = false
                         },
-                        modifier = Modifier.fillMaxWidth().weight(1f)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
                     )
                 }
 
@@ -145,11 +158,50 @@ fun BibleWorkspace(
                     VerseList(
                         book = selectedBook!!,
                         chapter = selectedChapter!!,
+                        selection = verseSelection,
+                        onVerseClick = {
+                                verseNumber,
+                                extendSelection ->
+                            verseSelection =
+                                if (
+                                    extendSelection && verseSelection != null
+                                ) {
+                                    verseSelection!!
+                                        .extendTo(
+                                            verseNumber
+                                        )
+                                } else {
+                                    BibleVerseSelection(
+                                        anchor = verseNumber
+                                    )
+                                }
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
                     )
                 }
+            }
+
+            if (
+                !showBooks &&
+                !showChapters &&
+                selectedBook != null &&
+                selectedChapter != null &&
+                verseSelection != null
+            ) {
+                Spacer(
+                    modifier = Modifier.height(12.dp)
+                )
+
+                BibleSelectionBar(
+                    book = selectedBook!!,
+                    chapter = selectedChapter!!,
+                    selection = verseSelection!!,
+                    onClear = {
+                        verseSelection = null
+                    }
+                )
             }
         }
     }
@@ -518,25 +570,64 @@ private fun ChapterTile(
 private fun VerseList(
     book: BibleBook,
     chapter: BibleChapter,
+    selection: BibleVerseSelection?,
+    onVerseClick: (
+        verseNumber: Int,
+        extendSelection: Boolean
+    ) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val windowInfo = LocalWindowInfo.current
+
     Column(
         modifier = modifier
     ) {
-        Text(
-            text = "${book.name}, ${chapter.number}",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold
-        )
+        Row(
+            modifier =
+                Modifier.fillMaxWidth(),
+            verticalAlignment =
+                Alignment.CenterVertically,
+            horizontalArrangement =
+                Arrangement.SpaceBetween
+        ) {
+            Text(
+                text =
+                    "${book.name}, ${chapter.number}",
+                style =
+                    MaterialTheme
+                        .typography
+                        .titleLarge,
+                fontWeight =
+                    FontWeight.SemiBold
+            )
+
+            Text(
+                text =
+                    "Клик — выбрать • Shift+клик — диапазон",
+                style =
+                    MaterialTheme
+                        .typography
+                        .bodySmall,
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .onSurfaceVariant
+            )
+        }
 
         Spacer(
             modifier = Modifier.height(12.dp)
         )
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-            contentPadding = PaddingValues(bottom = 24.dp)
+            modifier =
+                Modifier.fillMaxSize(),
+            verticalArrangement =
+                Arrangement.spacedBy(4.dp),
+            contentPadding =
+                PaddingValues(
+                    bottom = 24.dp
+                )
         ) {
             items(
                 items =
@@ -548,9 +639,32 @@ private fun VerseList(
                     it.number
                 }
             ) { verse ->
+
+                val selected =
+                    selection
+                        ?.contains(
+                            verse.number
+                        )
+                        ?: false
+
                 Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            onVerseClick(
+                                verse.number,
+                                windowInfo
+                                    .keyboardModifiers
+                                    .isShiftPressed
+                            )
+                        },
+                    shape = MaterialTheme.shapes.medium,
+                    color =
+                        if (selected) {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surface
+                        }
                 ) {
                     Row(
                         modifier = Modifier
@@ -564,17 +678,86 @@ private fun VerseList(
                         Text(
                             text = verse.number.toString(),
                             style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                            color =
+                                if (selected) {
+                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                },
                             fontWeight = FontWeight.Bold
                         )
 
                         Text(
                             text = verse.text,
                             style = MaterialTheme.typography.bodyLarge,
+                            color =
+                                if (selected) {
+                                    MaterialTheme
+                                        .colorScheme
+                                        .onSecondaryContainer
+                                } else {
+                                    MaterialTheme
+                                        .colorScheme
+                                        .onSurface
+                                },
                             modifier = Modifier.weight(1f)
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BibleSelectionBar(
+    book: BibleBook,
+    chapter: BibleChapter,
+    selection: BibleVerseSelection,
+    onClear: () -> Unit
+) {
+    val versePart =
+        if (
+            selection.start == selection.end
+        ) {
+            selection.start.toString()
+        } else {
+            "${selection.start}–${selection.end}"
+        }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        tonalElevation = 3.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = 16.dp,
+                    vertical = 10.dp
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(
+                    text = "Выбранный отрывок",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Text(
+                    text = "${book.abbreviation}. ${chapter.number}:" + versePart,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            TextButton(
+                onClick = onClear
+            ) {
+                Text("Снять выбор")
             }
         }
     }
