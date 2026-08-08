@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.holypresenter_bible.domain.BibleBook
 import org.holypresenter_bible.domain.BibleChapter
+import org.holypresenter_bible.domain.BibleReference
 import org.holypresenter_bible.domain.BibleTestament
 import org.holypresenter_bible.domain.BibleTranslation
 import org.holypresenter_bible.repository.BibleRepository
@@ -58,6 +59,24 @@ fun BibleWorkspace(
     var verseSelection by remember {
         mutableStateOf<BibleVerseSelection?>(null)
     }
+
+    val selectedReference =
+        if (
+            selectedTranslation != null &&
+            selectedBook != null &&
+            selectedChapter != null &&
+            verseSelection != null
+        ) {
+            BibleReference(
+                translationId = selectedTranslation!!.id,
+                bookId = selectedBook!!.id,
+                chapter = selectedChapter!!.number,
+                verseStart = verseSelection!!.start,
+                verseEnd = verseSelection!!.end
+            )
+        } else {
+            null
+        }
 
     Surface(
         modifier = modifier.fillMaxSize()
