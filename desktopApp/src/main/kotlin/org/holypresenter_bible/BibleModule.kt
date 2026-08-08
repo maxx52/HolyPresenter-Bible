@@ -40,7 +40,9 @@ class BibleModule : HolyModule {
 
     @Composable
     override fun Workspace() {
-        BibleWorkspace()
+        BibleWorkspace(
+            repository = repository
+        )
     }
 
     private fun resolveTranslationsDirectory(): File {
