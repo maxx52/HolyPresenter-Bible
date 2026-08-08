@@ -14,6 +14,8 @@ class BibleModule : HolyModule {
             translationsDirectory = resolveTranslationsDirectory()
         )
 
+    private lateinit var context: ModuleContext
+
     override val metadata =
         ModuleMetadata(
             id = "bible",
@@ -28,19 +30,23 @@ class BibleModule : HolyModule {
     override fun onLoad(
         context: ModuleContext
     ) {
-        val translations = repository.getTranslations()
+        this.context = context
+
+        val translations =
+            repository.getTranslations()
 
         println(
-            "[Bible] Loaded translations: " + translations
-                .joinToString {
-                    it.name
-                }
+            "[Bible] Loaded translations: " +
+                    translations.joinToString {
+                        it.name
+                    }
         )
     }
 
     @Composable
     override fun Workspace() {
         BibleWorkspace(
+            moduleContext = context,
             repository = repository
         )
     }

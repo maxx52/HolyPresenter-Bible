@@ -17,15 +17,21 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import holypresenter.org.platform.api.module.ModuleContext
+import holypresenter.org.platform.api.planner.PlannerItem
+import holypresenter.org.platform.api.planner.PlannerReference
+import holypresenter.org.platform.api.planner.PlannerService
 import org.holypresenter_bible.domain.BibleBook
 import org.holypresenter_bible.domain.BibleChapter
 import org.holypresenter_bible.domain.BibleReference
 import org.holypresenter_bible.domain.BibleTestament
 import org.holypresenter_bible.domain.BibleTranslation
+import org.holypresenter_bible.planner.BiblePlannerReferenceCodec
 import org.holypresenter_bible.repository.BibleRepository
 
 @Composable
 fun BibleWorkspace(
+    moduleContext: ModuleContext,
     repository: BibleRepository,
     modifier: Modifier = Modifier
 ) {
@@ -76,6 +82,29 @@ fun BibleWorkspace(
             )
         } else {
             null
+        }
+
+    val selectedReferenceTitle =
+        if (selectedReference != null && selectedBook != null) {
+            val verses =
+                if (selectedReference.verseStart == selectedReference.verseEnd) {
+                    selectedReference
+                        .verseStart
+                        .toString()
+                } else {
+                    "${selectedReference.verseStart}–${selectedReference.verseEnd}"
+                }
+
+            "${selectedBook!!.abbreviation}. ${selectedReference.chapter}:$verses"
+        } else {
+            null
+        }
+
+    val plannerService =
+        remember(moduleContext) {
+            moduleContext.services.get(
+                PlannerService::class
+            )
         }
 
     Surface(
@@ -217,6 +246,21 @@ fun BibleWorkspace(
                     book = selectedBook!!,
                     chapter = selectedChapter!!,
                     selection = verseSelection!!,
+                    onAddToPlanner = {
+                        val reference = selectedReference ?: return@BibleSelectionBar
+                        val title = selectedReferenceTitle ?: return@BibleSelectionBar
+
+                        plannerService?.add(
+                            PlannerItem.Generic(
+                                reference =
+                                    PlannerReference(
+                                        moduleId = "bible",
+                                        itemId = BiblePlannerReferenceCodec.encode(reference)
+                                    ),
+                                title = title
+                            )
+                        )
+                    },
                     onClear = {
                         verseSelection = null
                     }
@@ -733,6 +777,7 @@ private fun BibleSelectionBar(
     book: BibleBook,
     chapter: BibleChapter,
     selection: BibleVerseSelection,
+    onAddToPlanner: () -> Unit,
     onClear: () -> Unit
 ) {
     val versePart =
@@ -773,10 +818,21 @@ private fun BibleSelectionBar(
                 )
             }
 
-            TextButton(
-                onClick = onClear
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Снять выбор")
+                Button(
+                    onClick = onAddToPlanner
+                ) {
+                    Text("+ В план")
+                }
+
+                TextButton(
+                    onClick = onClear
+                ) {
+                    Text("Снять выбор")
+                }
             }
         }
     }
