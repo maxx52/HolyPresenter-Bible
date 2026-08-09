@@ -27,8 +27,10 @@ import org.holypresenter_bible.domain.BibleReference
 import org.holypresenter_bible.domain.BibleTestament
 import org.holypresenter_bible.domain.BibleTranslation
 import org.holypresenter_bible.planner.BiblePlannerReferenceCodec
+import org.holypresenter_bible.presentation.workspace.BibleScreen
 import org.holypresenter_bible.presentation.workspace.BibleWorkspaceState
 import org.holypresenter_bible.repository.BibleRepository
+import org.holypresenter_bible.ui.presentation.BiblePresenterWorkspace
 
 @Composable
 fun BibleWorkspace(
@@ -37,6 +39,23 @@ fun BibleWorkspace(
     workspaceState: BibleWorkspaceState,
     modifier: Modifier = Modifier
 ) {
+    if (workspaceState.screen == BibleScreen.PRESENTER) {
+        val reference = workspaceState.presenterReference
+
+        if (reference != null) {
+            BiblePresenterWorkspace(
+                moduleContext = moduleContext,
+                repository = repository,
+                reference = reference,
+                onBackClick = {
+                    workspaceState.backToNavigator()
+                },
+                modifier = modifier
+            )
+        }
+        return
+    }
+
     val translations =
         remember(repository) {
             repository.getTranslations()
@@ -301,6 +320,10 @@ fun BibleWorkspace(
                                 title = title
                             )
                         )
+                    },
+                    onOpenPresenter = {
+                        val reference = selectedReference ?: return@BibleSelectionBar
+                        workspaceState.openPresenter(reference)
                     },
                     onClear = {
                         verseSelection = null
@@ -819,6 +842,7 @@ private fun BibleSelectionBar(
     chapter: BibleChapter,
     selection: BibleVerseSelection,
     onAddToPlanner: () -> Unit,
+    onOpenPresenter: () -> Unit,
     onClear: () -> Unit
 ) {
     val versePart =
@@ -863,10 +887,16 @@ private fun BibleSelectionBar(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Button(
+                OutlinedButton(
                     onClick = onAddToPlanner
                 ) {
                     Text("+ В план")
+                }
+
+                Button(
+                    onClick = onOpenPresenter
+                ) {
+                    Text("Открыть в Presenter")
                 }
 
                 TextButton(
