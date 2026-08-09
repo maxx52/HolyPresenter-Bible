@@ -27,12 +27,14 @@ import org.holypresenter_bible.domain.BibleReference
 import org.holypresenter_bible.domain.BibleTestament
 import org.holypresenter_bible.domain.BibleTranslation
 import org.holypresenter_bible.planner.BiblePlannerReferenceCodec
+import org.holypresenter_bible.presentation.workspace.BibleWorkspaceState
 import org.holypresenter_bible.repository.BibleRepository
 
 @Composable
 fun BibleWorkspace(
     moduleContext: ModuleContext,
     repository: BibleRepository,
+    workspaceState: BibleWorkspaceState,
     modifier: Modifier = Modifier
 ) {
     val translations =
@@ -64,6 +66,45 @@ fun BibleWorkspace(
 
     var verseSelection by remember {
         mutableStateOf<BibleVerseSelection?>(null)
+    }
+
+    val navigationRequest = workspaceState.navigationRequest
+
+    LaunchedEffect(navigationRequest?.id) {
+        val reference = navigationRequest
+            ?.reference
+            ?: return@LaunchedEffect
+
+        val translation = translations
+            .firstOrNull {
+                it.id == reference.translationId
+            }
+            ?: return@LaunchedEffect
+
+        val book = translation.books
+            .firstOrNull {
+                it.id == reference.bookId
+            }
+            ?: return@LaunchedEffect
+
+        val chapter = book.chapters
+            .firstOrNull {
+                it.number == reference.chapter
+            }
+            ?: return@LaunchedEffect
+
+        selectedTranslation = translation
+        selectedBook = book
+        selectedChapter = chapter
+
+        verseSelection =
+            BibleVerseSelection(
+                anchor = reference.verseStart,
+                focus = reference.verseEnd
+            )
+
+        showBooks = false
+        showChapters = false
     }
 
     val selectedReference =

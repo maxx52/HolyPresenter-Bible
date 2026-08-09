@@ -4,6 +4,9 @@ import androidx.compose.runtime.Composable
 import holypresenter.org.platform.api.module.HolyModule
 import holypresenter.org.platform.api.module.ModuleContext
 import holypresenter.org.platform.api.module.ModuleMetadata
+import holypresenter.org.platform.api.planner.PlannerItemHandlerRegistry
+import org.holypresenter_bible.planner.BiblePlannerItemHandler
+import org.holypresenter_bible.presentation.workspace.BibleWorkspaceState
 import org.holypresenter_bible.repository.JsonBibleRepository
 import org.holypresenter_bible.ui.BibleWorkspace
 import java.io.File
@@ -14,7 +17,10 @@ class BibleModule : HolyModule {
             translationsDirectory = resolveTranslationsDirectory()
         )
 
+    private val workspaceState = BibleWorkspaceState()
     private lateinit var context: ModuleContext
+
+    private var plannerItemHandlerRegistry: PlannerItemHandlerRegistry? = null
 
     override val metadata =
         ModuleMetadata(
@@ -27,27 +33,41 @@ class BibleModule : HolyModule {
             icon = "📖"
         )
 
-    override fun onLoad(
+    override fun onLoad(context: ModuleContext) {
+        this.context = context
+        val translations = repository.getTranslations()
+        println("[Bible] Loaded translations: " + translations.joinToString { it.name })
+    }
+
+    override fun onEnable(
         context: ModuleContext
     ) {
-        this.context = context
+        val registry = context.services.get(PlannerItemHandlerRegistry::class)
 
-        val translations =
-            repository.getTranslations()
+        plannerItemHandlerRegistry = registry
 
-        println(
-            "[Bible] Loaded translations: " +
-                    translations.joinToString {
-                        it.name
-                    }
+        registry?.register(
+            BiblePlannerItemHandler(
+                repository = repository,
+                onActivateReference = workspaceState::openReference
+            )
         )
+    }
+
+    override fun onDisable() {
+        plannerItemHandlerRegistry
+            ?.unregister(
+                metadata.id
+            )
+        plannerItemHandlerRegistry = null
     }
 
     @Composable
     override fun Workspace() {
         BibleWorkspace(
             moduleContext = context,
-            repository = repository
+            repository = repository,
+            workspaceState = workspaceState
         )
     }
 
@@ -67,9 +87,7 @@ class BibleModule : HolyModule {
                 )
             } else {
                 File(
-                    System.getProperty(
-                        "user.home"
-                    ),
+                    System.getProperty("user.home"),
                     ".holypresenter"
                 )
             }
