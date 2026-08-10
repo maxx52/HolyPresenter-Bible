@@ -18,6 +18,10 @@ import org.holypresenter.platform.ui.presenter.HolyProjectionToolbar
 import org.holypresenter_bible.domain.BibleReference
 import org.holypresenter_bible.presentation.BiblePresentationFactory
 import org.holypresenter_bible.repository.BibleRepository
+import java.awt.event.KeyEvent
+import androidx.compose.runtime.DisposableEffect
+import java.awt.KeyEventDispatcher
+import java.awt.KeyboardFocusManager
 
 @Composable
 fun BiblePresenterWorkspace(
@@ -163,6 +167,66 @@ fun BiblePresenterWorkspace(
 
     val selectedVerse = verses.getOrNull(selectedSlideIndex)
 
+    DisposableEffect(
+        reference,
+        verses.size
+    ) {
+        val keyboardManager =
+            KeyboardFocusManager
+                .getCurrentKeyboardFocusManager()
+
+        val dispatcher =
+            KeyEventDispatcher { event ->
+                if (
+                    event.id !=
+                    KeyEvent.KEY_PRESSED
+                ) {
+                    return@KeyEventDispatcher false
+                }
+
+                when (event.keyCode) {
+                    KeyEvent.VK_RIGHT,
+                    KeyEvent.VK_DOWN,
+                    KeyEvent.VK_PAGE_DOWN,
+                    KeyEvent.VK_SPACE -> {
+                        showNextSlide()
+                        true
+                    }
+
+                    KeyEvent.VK_LEFT,
+                    KeyEvent.VK_UP,
+                    KeyEvent.VK_PAGE_UP -> {
+                        showPreviousSlide()
+                        true
+                    }
+
+                    KeyEvent.VK_ESCAPE -> {
+                        projectionService?.close()
+                        true
+                    }
+
+                    KeyEvent.VK_B -> {
+                        projectionService?.toggleBlackScreen()
+                        true
+                    }
+
+                    KeyEvent.VK_C -> {
+                        projectionService?.toggleTextVisibility()
+                        true
+                    }
+                    else -> false
+                }
+            }
+
+        keyboardManager
+            .addKeyEventDispatcher(dispatcher)
+
+        onDispose {
+            keyboardManager
+                .removeKeyEventDispatcher(dispatcher)
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -188,10 +252,7 @@ fun BiblePresenterWorkspace(
             Spacer(modifier = Modifier.weight(1f))
 
             Text(
-                text =
-                    translation
-                        ?.abbreviation
-                        .orEmpty(),
+                text = translation?.abbreviation.orEmpty(),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -247,7 +308,6 @@ fun BiblePresenterWorkspace(
             modifier = Modifier.fillMaxSize(),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-
             LazyColumn(
                 modifier = Modifier
                     .width(360.dp)
