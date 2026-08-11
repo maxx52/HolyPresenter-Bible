@@ -19,7 +19,7 @@ dependencies {
     implementation(libs.kotlinx.coroutinesSwing)
     implementation(libs.kotlinxSerializationJson)
     implementation("org.holypresenter:platform-api:0.6.0")
-    implementation("org.holypresenter:platform-ui:0.7.1") {
+    implementation("org.holypresenter:platform-ui:0.7.3") {
         exclude(group = "androidx.compose.material3")
         exclude(group = "androidx.compose.runtime")
         exclude(group = "androidx.compose.foundation")
