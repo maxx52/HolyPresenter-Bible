@@ -1,5 +1,6 @@
 package org.holypresenter_bible.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,16 +22,20 @@ import holypresenter.org.platform.api.module.ModuleContext
 import holypresenter.org.platform.api.planner.PlannerItem
 import holypresenter.org.platform.api.planner.PlannerReference
 import holypresenter.org.platform.api.planner.PlannerService
+import holypresenter.org.platform.api.projection.ProjectionService
+import org.holypresenter.platform.ui.presenter.HolyProjectionPreview
+import org.holypresenter.platform.ui.presenter.HolyProjectionShortcutsHint
 import org.holypresenter_bible.domain.BibleBook
 import org.holypresenter_bible.domain.BibleChapter
 import org.holypresenter_bible.domain.BibleReference
 import org.holypresenter_bible.domain.BibleTestament
 import org.holypresenter_bible.domain.BibleTranslation
 import org.holypresenter_bible.planner.BiblePlannerReferenceCodec
-import org.holypresenter_bible.presentation.workspace.BibleScreen
 import org.holypresenter_bible.presentation.workspace.BibleWorkspaceState
 import org.holypresenter_bible.repository.BibleRepository
-import org.holypresenter_bible.ui.presentation.BiblePresenterWorkspace
+import java.awt.KeyEventDispatcher
+import java.awt.KeyboardFocusManager
+import java.awt.event.KeyEvent
 
 @Composable
 fun BibleWorkspace(
@@ -39,23 +44,6 @@ fun BibleWorkspace(
     workspaceState: BibleWorkspaceState,
     modifier: Modifier = Modifier
 ) {
-    if (workspaceState.screen == BibleScreen.PRESENTER) {
-        val reference = workspaceState.presenterReference
-
-        if (reference != null) {
-            BiblePresenterWorkspace(
-                moduleContext = moduleContext,
-                repository = repository,
-                reference = reference,
-                onBackClick = {
-                    workspaceState.backToNavigator()
-                },
-                modifier = modifier
-            )
-        }
-        return
-    }
-
     val translations =
         remember(repository) {
             repository.getTranslations()
@@ -85,6 +73,14 @@ fun BibleWorkspace(
 
     var verseSelection by remember {
         mutableStateOf<BibleVerseSelection?>(null)
+    }
+
+    var previewVerseNumber by remember {
+        mutableStateOf<Int?>(null)
+    }
+
+    var hasProjectedPreviewVerse by remember {
+        mutableStateOf(false)
     }
 
     val navigationRequest = workspaceState.navigationRequest
@@ -121,6 +117,9 @@ fun BibleWorkspace(
                 anchor = reference.verseStart,
                 focus = reference.verseEnd
             )
+
+        previewVerseNumber = reference.verseStart
+        hasProjectedPreviewVerse = false
 
         showBooks = false
         showChapters = false
@@ -167,6 +166,194 @@ fun BibleWorkspace(
             )
         }
 
+    val projectionService =
+        remember(moduleContext) {
+            moduleContext.services.get(
+                ProjectionService::class
+            )
+        }
+
+    val showVerse: (
+        verseNumber: Int,
+        extendSelection: Boolean
+    ) -> Unit = { verseNumber, extendSelection ->
+        val translation = selectedTranslation
+        val book = selectedBook
+        val chapter = selectedChapter
+
+        if (
+            translation != null &&
+            book != null &&
+            chapter != null
+        ) {
+            val newSelection =
+                if (
+                    extendSelection &&
+                    verseSelection != null
+                ) {
+                    verseSelection!!.extendTo(verseNumber)
+                } else {
+                    BibleVerseSelection(
+                        anchor = verseNumber
+                    )
+                }
+
+            verseSelection = newSelection
+            previewVerseNumber = verseNumber
+
+            hasProjectedPreviewVerse =
+                showBibleVerseOnProjector(
+                    projectionService = projectionService,
+                    repository = repository,
+                    translation = translation,
+                    book = book,
+                    chapter = chapter,
+                    selection = newSelection,
+                    verseNumber = verseNumber
+                )
+        }
+    }
+
+    val latestChapter =
+        rememberUpdatedState(selectedChapter)
+    val latestPassageVisible =
+        rememberUpdatedState(
+            !showBooks &&
+                !showChapters
+        )
+    val latestPreviewVerseNumber =
+        rememberUpdatedState(previewVerseNumber)
+    val latestProjectionService =
+        rememberUpdatedState(projectionService)
+    val latestHasProjectedPreviewVerse =
+        rememberUpdatedState(hasProjectedPreviewVerse)
+    val latestShowVerse =
+        rememberUpdatedState(showVerse)
+
+    DisposableEffect(Unit) {
+        val keyboardManager =
+            KeyboardFocusManager
+                .getCurrentKeyboardFocusManager()
+
+        fun moveVerse(offset: Int): Boolean {
+            if (!latestPassageVisible.value) {
+                return false
+            }
+
+            val chapter = latestChapter.value ?: return false
+            val currentVerseNumber =
+                latestPreviewVerseNumber.value
+                    ?: return false
+            val verses =
+                chapter.verses.sortedBy {
+                    it.number
+                }
+            val currentIndex =
+                verses.indexOfFirst {
+                    it.number == currentVerseNumber
+                }
+
+            if (currentIndex < 0) {
+                return false
+            }
+
+            val projectionIsOpen =
+                latestProjectionService
+                    .value
+                    ?.state
+                    ?.value
+                    ?.isOpen == true
+
+            if (
+                !latestHasProjectedPreviewVerse.value ||
+                !projectionIsOpen
+            ) {
+                latestShowVerse.value(
+                    currentVerseNumber,
+                    false
+                )
+                return true
+            }
+
+            val targetVerse =
+                verses.getOrNull(
+                    currentIndex + offset
+                )
+                    ?: return true
+
+            latestShowVerse.value(
+                targetVerse.number,
+                false
+            )
+            return true
+        }
+
+        val dispatcher =
+            KeyEventDispatcher { event ->
+                if (
+                    event.id != KeyEvent.KEY_PRESSED ||
+                    event.isControlDown ||
+                    event.isAltDown ||
+                    event.isMetaDown
+                ) {
+                    return@KeyEventDispatcher false
+                }
+
+                when (event.keyCode) {
+                    KeyEvent.VK_RIGHT,
+                    KeyEvent.VK_DOWN,
+                    KeyEvent.VK_PAGE_DOWN,
+                    KeyEvent.VK_SPACE ->
+                        moveVerse(1)
+
+                    KeyEvent.VK_LEFT,
+                    KeyEvent.VK_UP,
+                    KeyEvent.VK_PAGE_UP ->
+                        moveVerse(-1)
+
+                    KeyEvent.VK_B -> {
+                        val service = latestProjectionService.value
+                        if (service?.state?.value?.isOpen == true) {
+                            service.toggleBlackScreen()
+                            true
+                        } else {
+                            false
+                        }
+                    }
+
+                    KeyEvent.VK_C -> {
+                        val service = latestProjectionService.value
+                        if (service?.state?.value?.isOpen == true) {
+                            service.toggleTextVisibility()
+                            true
+                        } else {
+                            false
+                        }
+                    }
+
+                    KeyEvent.VK_ESCAPE -> {
+                        val service = latestProjectionService.value
+                        if (service?.state?.value?.isOpen == true) {
+                            service.close()
+                            true
+                        } else {
+                            false
+                        }
+                    }
+
+                    else -> false
+                }
+            }
+
+        keyboardManager
+            .addKeyEventDispatcher(dispatcher)
+
+        onDispose {
+            keyboardManager
+                .removeKeyEventDispatcher(dispatcher)
+        }
+    }
+
     Surface(
         modifier = modifier.fillMaxSize()
     ) {
@@ -184,6 +371,8 @@ fun BibleWorkspace(
                     selectedBook = null
                     selectedChapter = null
                     verseSelection = null
+                    previewVerseNumber = null
+                    hasProjectedPreviewVerse = false
                     showBooks = true
                     showChapters = false
                 }
@@ -237,6 +426,8 @@ fun BibleWorkspace(
                             selectedBook = book
                             selectedChapter = null
                             verseSelection = null
+                            previewVerseNumber = null
+                            hasProjectedPreviewVerse = false
                             showBooks = false
                             showChapters = true
                         },
@@ -253,6 +444,8 @@ fun BibleWorkspace(
                         onChapterSelected = { chapter ->
                             selectedChapter = chapter
                             verseSelection = null
+                            previewVerseNumber = null
+                            hasProjectedPreviewVerse = false
                             showBooks = false
                             showChapters = false
                         },
@@ -263,27 +456,12 @@ fun BibleWorkspace(
                 }
 
                 selectedBook != null && selectedChapter != null -> {
-                    VerseList(
+                    BiblePassageWorkspace(
                         book = selectedBook!!,
                         chapter = selectedChapter!!,
                         selection = verseSelection,
-                        onVerseClick = {
-                                verseNumber,
-                                extendSelection ->
-                            verseSelection =
-                                if (
-                                    extendSelection && verseSelection != null
-                                ) {
-                                    verseSelection!!
-                                        .extendTo(
-                                            verseNumber
-                                        )
-                                } else {
-                                    BibleVerseSelection(
-                                        anchor = verseNumber
-                                    )
-                                }
-                        },
+                        previewVerseNumber = previewVerseNumber,
+                        onVerseClick = showVerse,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -320,13 +498,6 @@ fun BibleWorkspace(
                                 title = title
                             )
                         )
-                    },
-                    onOpenPresenter = {
-                        val reference = selectedReference ?: return@BibleSelectionBar
-                        workspaceState.openPresenter(reference)
-                    },
-                    onClear = {
-                        verseSelection = null
                     }
                 )
             }
@@ -694,10 +865,96 @@ private fun ChapterTile(
 }
 
 @Composable
+private fun BiblePassageWorkspace(
+    book: BibleBook,
+    chapter: BibleChapter,
+    selection: BibleVerseSelection?,
+    previewVerseNumber: Int?,
+    onVerseClick: (
+        verseNumber: Int,
+        extendSelection: Boolean
+    ) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val previewVerse =
+        chapter.verses.firstOrNull {
+            it.number == previewVerseNumber
+        }
+
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        VerseList(
+            book = book,
+            chapter = chapter,
+            selection = selection,
+            previewVerseNumber = previewVerseNumber,
+            onVerseClick = onVerseClick,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+        )
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+        ) {
+            Text(
+                text = "Предпросмотр",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(
+                modifier = Modifier.height(12.dp)
+            )
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f),
+                shape = MaterialTheme.shapes.large,
+                tonalElevation = 2.dp
+            ) {
+                if (previewVerse != null) {
+                    HolyProjectionPreview(
+                        text = previewVerse.text,
+                        caption =
+                            "${book.abbreviation}. ${chapter.number}:${previewVerse.number}",
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Выберите стих — он сразу появится\nна проекторе и в предпросмотре",
+                            style = MaterialTheme.typography.bodyLarge,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            HolyProjectionShortcutsHint(
+                modifier = Modifier.padding(top = 12.dp)
+            )
+        }
+    }
+}
+
+@Composable
 private fun VerseList(
     book: BibleBook,
     chapter: BibleChapter,
     selection: BibleVerseSelection?,
+    previewVerseNumber: Int?,
     onVerseClick: (
         verseNumber: Int,
         extendSelection: Boolean
@@ -730,7 +987,7 @@ private fun VerseList(
 
             Text(
                 text =
-                    "Клик — выбрать • Shift+клик — диапазон",
+                    "Клик — показать • Shift+клик — диапазон",
                 style =
                     MaterialTheme
                         .typography
@@ -774,6 +1031,9 @@ private fun VerseList(
                         )
                         ?: false
 
+                val shownInPreview =
+                    previewVerseNumber == verse.number
+
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -787,10 +1047,24 @@ private fun VerseList(
                         },
                     shape = MaterialTheme.shapes.medium,
                     color =
-                        if (selected) {
-                            MaterialTheme.colorScheme.secondaryContainer
+                        when {
+                            shownInPreview ->
+                                MaterialTheme.colorScheme.primaryContainer
+
+                            selected ->
+                                MaterialTheme.colorScheme.secondaryContainer
+
+                            else ->
+                                MaterialTheme.colorScheme.surface
+                        },
+                    border =
+                        if (shownInPreview) {
+                            BorderStroke(
+                                width = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         } else {
-                            MaterialTheme.colorScheme.surface
+                            null
                         }
                 ) {
                     Row(
@@ -806,10 +1080,15 @@ private fun VerseList(
                             text = verse.number.toString(),
                             style = MaterialTheme.typography.titleMedium,
                             color =
-                                if (selected) {
-                                    MaterialTheme.colorScheme.onSecondaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.primary
+                                when {
+                                    shownInPreview ->
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+
+                                    selected ->
+                                        MaterialTheme.colorScheme.onSecondaryContainer
+
+                                    else ->
+                                        MaterialTheme.colorScheme.primary
                                 },
                             fontWeight = FontWeight.Bold
                         )
@@ -818,14 +1097,15 @@ private fun VerseList(
                             text = verse.text,
                             style = MaterialTheme.typography.bodyLarge,
                             color =
-                                if (selected) {
-                                    MaterialTheme
-                                        .colorScheme
-                                        .onSecondaryContainer
-                                } else {
-                                    MaterialTheme
-                                        .colorScheme
-                                        .onSurface
+                                when {
+                                    shownInPreview ->
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+
+                                    selected ->
+                                        MaterialTheme.colorScheme.onSecondaryContainer
+
+                                    else ->
+                                        MaterialTheme.colorScheme.onSurface
                                 },
                             modifier = Modifier.weight(1f)
                         )
@@ -841,9 +1121,7 @@ private fun BibleSelectionBar(
     book: BibleBook,
     chapter: BibleChapter,
     selection: BibleVerseSelection,
-    onAddToPlanner: () -> Unit,
-    onOpenPresenter: () -> Unit,
-    onClear: () -> Unit
+    onAddToPlanner: () -> Unit
 ) {
     val versePart =
         if (
@@ -883,27 +1161,10 @@ private fun BibleSelectionBar(
                 )
             }
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            OutlinedButton(
+                onClick = onAddToPlanner
             ) {
-                OutlinedButton(
-                    onClick = onAddToPlanner
-                ) {
-                    Text("+ В план")
-                }
-
-                Button(
-                    onClick = onOpenPresenter
-                ) {
-                    Text("Открыть в Presenter")
-                }
-
-                TextButton(
-                    onClick = onClear
-                ) {
-                    Text("Снять выбор")
-                }
+                Text("+ В план")
             }
         }
     }
