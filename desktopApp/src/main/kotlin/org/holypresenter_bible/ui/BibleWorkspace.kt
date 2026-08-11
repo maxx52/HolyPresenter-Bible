@@ -22,9 +22,7 @@ import holypresenter.org.platform.api.module.ModuleContext
 import holypresenter.org.platform.api.planner.PlannerItem
 import holypresenter.org.platform.api.planner.PlannerReference
 import holypresenter.org.platform.api.planner.PlannerService
-import holypresenter.org.platform.api.projection.ProjectionService
 import org.holypresenter.platform.ui.presenter.HolyProjectionPreview
-import org.holypresenter.platform.ui.presenter.HolyProjectionShortcutsHint
 import org.holypresenter_bible.domain.BibleBook
 import org.holypresenter_bible.domain.BibleChapter
 import org.holypresenter_bible.domain.BiblePassage
@@ -57,7 +55,7 @@ fun BibleWorkspace(
             translations
                 .firstOrNull { translation ->
                     translation.id == defaultTranslationId
-                }
+            }
                 ?: translations.firstOrNull()
         )
     }
@@ -84,10 +82,6 @@ fun BibleWorkspace(
 
     var previewVerseNumber by remember {
         mutableStateOf<Int?>(null)
-    }
-
-    var hasProjectedSelection by remember {
-        mutableStateOf(false)
     }
 
     val navigationRequest = workspaceState.navigationRequest
@@ -126,8 +120,6 @@ fun BibleWorkspace(
             )
 
         previewVerseNumber = reference.verseStart
-        hasProjectedSelection = false
-
         showBooks = false
         showChapters = false
     }
@@ -183,14 +175,7 @@ fun BibleWorkspace(
             )
         }
 
-    val projectionService =
-        remember(moduleContext) {
-            moduleContext.services.get(
-                ProjectionService::class
-            )
-        }
-
-    val selectAndShowVerse: (
+    val selectAndPreviewVerse: (
         verseNumber: Int,
         extendSelection: Boolean
     ) -> Unit = { verseNumber, extendSelection ->
@@ -214,19 +199,10 @@ fun BibleWorkspace(
                         anchor = verseNumber
                     )
                 }
+            }
 
             verseSelection = newSelection
             previewVerseNumber = verseNumber
-
-            hasProjectedSelection =
-                showBibleSelectionOnProjector(
-                    projectionService = projectionService,
-                    repository = repository,
-                    translation = translation,
-                    book = book,
-                    chapter = chapter,
-                    selection = newSelection
-                )
         }
     }
 
@@ -239,12 +215,8 @@ fun BibleWorkspace(
         )
     val latestPreviewVerseNumber =
         rememberUpdatedState(previewVerseNumber)
-    val latestProjectionService =
-        rememberUpdatedState(projectionService)
-    val latestHasProjectedSelection =
-        rememberUpdatedState(hasProjectedSelection)
-    val latestSelectAndShowVerse =
-        rememberUpdatedState(selectAndShowVerse)
+    val latestSelectAndPreviewVerse =
+        rememberUpdatedState(selectAndPreviewVerse)
 
     DisposableEffect(Unit) {
         val keyboardManager =
@@ -273,31 +245,13 @@ fun BibleWorkspace(
                 return false
             }
 
-            val projectionIsOpen =
-                latestProjectionService
-                    .value
-                    ?.state
-                    ?.value
-                    ?.isOpen == true
-
-            if (
-                !latestHasProjectedSelection.value ||
-                !projectionIsOpen
-            ) {
-                latestSelectAndShowVerse.value(
-                    currentVerseNumber,
-                    false
-                )
-                return true
-            }
-
             val targetVerse =
                 verses.getOrNull(
                     currentIndex + offset
                 )
                     ?: return true
 
-            latestSelectAndShowVerse.value(
+            latestSelectAndPreviewVerse.value(
                 targetVerse.number,
                 false
             )
@@ -326,36 +280,6 @@ fun BibleWorkspace(
                     KeyEvent.VK_UP,
                     KeyEvent.VK_PAGE_UP ->
                         moveVerse(-1)
-
-                    KeyEvent.VK_B -> {
-                        val service = latestProjectionService.value
-                        if (service?.state?.value?.isOpen == true) {
-                            service.toggleBlackScreen()
-                            true
-                        } else {
-                            false
-                        }
-                    }
-
-                    KeyEvent.VK_C -> {
-                        val service = latestProjectionService.value
-                        if (service?.state?.value?.isOpen == true) {
-                            service.toggleTextVisibility()
-                            true
-                        } else {
-                            false
-                        }
-                    }
-
-                    KeyEvent.VK_ESCAPE -> {
-                        val service = latestProjectionService.value
-                        if (service?.state?.value?.isOpen == true) {
-                            service.close()
-                            true
-                        } else {
-                            false
-                        }
-                    }
 
                     else -> false
                 }
@@ -388,7 +312,6 @@ fun BibleWorkspace(
                     selectedChapter = null
                     verseSelection = null
                     previewVerseNumber = null
-                    hasProjectedSelection = false
                     showBooks = true
                     showChapters = false
                 }
@@ -443,7 +366,6 @@ fun BibleWorkspace(
                             selectedChapter = null
                             verseSelection = null
                             previewVerseNumber = null
-                            hasProjectedSelection = false
                             showBooks = false
                             showChapters = true
                         },
@@ -461,7 +383,6 @@ fun BibleWorkspace(
                             selectedChapter = chapter
                             verseSelection = null
                             previewVerseNumber = null
-                            hasProjectedSelection = false
                             showBooks = false
                             showChapters = false
                         },
@@ -478,7 +399,7 @@ fun BibleWorkspace(
                         passage = selectedPassage,
                         selection = verseSelection,
                         previewVerseNumber = previewVerseNumber,
-                        onVerseClick = selectAndShowVerse,
+                        onVerseClick = selectAndPreviewVerse,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -958,7 +879,7 @@ private fun BiblePassageWorkspace(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Выберите стих — он сразу появится\nна проекторе и в предпросмотре",
+                            text = "Выберите стих — он появится\nв предпросмотре",
                             style = MaterialTheme.typography.bodyLarge,
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -966,10 +887,6 @@ private fun BiblePassageWorkspace(
                     }
                 }
             }
-
-            HolyProjectionShortcutsHint(
-                modifier = Modifier.padding(top = 12.dp)
-            )
         }
     }
 }
