@@ -44,6 +44,7 @@ fun BibleWorkspace(
     moduleContext: ModuleContext,
     repository: BibleRepository,
     workspaceState: BibleWorkspaceState,
+    defaultTranslationId: String? = null,
     modifier: Modifier = Modifier
 ) {
     val translations =
@@ -53,7 +54,11 @@ fun BibleWorkspace(
 
     var selectedTranslation by remember {
         mutableStateOf(
-            translations.firstOrNull()
+            translations
+                .firstOrNull { translation ->
+                    translation.id == defaultTranslationId
+                }
+                ?: translations.firstOrNull()
         )
     }
 

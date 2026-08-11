@@ -5,9 +5,14 @@ import org.holypresenter_bible.domain.BiblePassage
 import org.holypresenter_bible.domain.BibleReference
 import org.holypresenter_bible.domain.BibleTranslation
 import java.io.File
+import java.io.InputStream
 
 class JsonBibleRepository(
-    private val translationsDirectory: File
+    private val translationsDirectory: File,
+    private val bundledTranslationResources: List<String> = emptyList(),
+    private val resourceLoader: (String) -> InputStream? = { resourcePath ->
+        JsonBibleRepository::class.java.getResourceAsStream(resourcePath)
+    }
 ) : BibleRepository {
     private val json =
         Json {
@@ -16,15 +21,38 @@ class JsonBibleRepository(
         }
 
     private val cache = mutableMapOf<String, BibleTranslation>()
+    private val sourceCache = mutableMapOf<String, BibleTranslation>()
+    private val failedSources = mutableSetOf<String>()
 
     init {
         ensureTranslationsDirectory()
     }
 
     override fun getTranslations(): List<BibleTranslation> {
-        return translationFiles()
-            .mapNotNull { file ->
-                loadTranslation(file)
+        val bundledTranslations =
+            bundledTranslationResources
+                .mapNotNull { resourcePath ->
+                    loadBundledTranslation(resourcePath)
+                }
+
+        val bundledIds =
+            bundledTranslations
+                .mapTo(mutableSetOf()) { translation ->
+                    translation.id
+                }
+
+        val externalTranslations =
+            translationFiles()
+                .mapNotNull { file ->
+                    loadFileTranslation(file)
+                }
+                .filterNot { translation ->
+                    translation.id in bundledIds
+                }
+
+        return (bundledTranslations + externalTranslations)
+            .distinctBy { translation ->
+                translation.id
             }
             .sortedBy { translation ->
                 translation.name
@@ -40,13 +68,10 @@ class JsonBibleRepository(
                 return it
             }
 
-        val file =
-            translationFiles()
-                .firstOrNull { file ->
-                    file.nameWithoutExtension == translationId
-                }
-                ?: return null
-        return loadTranslation(file)
+        return getTranslations()
+            .firstOrNull { translation ->
+                translation.id == translationId
+            }
     }
 
     override fun getPassage(reference: BibleReference): BiblePassage? {
@@ -84,17 +109,60 @@ class JsonBibleRepository(
         )
     }
 
-    private fun loadTranslation(file: File): BibleTranslation? {
+    private fun loadBundledTranslation(
+        resourcePath: String
+    ): BibleTranslation? {
+        return loadTranslation(
+            sourceKey = "resource:$resourcePath",
+            sourceDescription = resourcePath
+        ) {
+            resourceLoader(resourcePath)
+                ?.bufferedReader(Charsets.UTF_8)
+                ?.use { reader ->
+                    reader.readText()
+                }
+                ?: error("Resource not found")
+        }
+    }
+
+    private fun loadFileTranslation(file: File): BibleTranslation? {
+        return loadTranslation(
+            sourceKey = "file:${file.absolutePath}",
+            sourceDescription = file.absolutePath
+        ) {
+            file.readText(Charsets.UTF_8)
+        }
+    }
+
+    private fun loadTranslation(
+        sourceKey: String,
+        sourceDescription: String,
+        readText: () -> String
+    ): BibleTranslation? {
+        sourceCache[sourceKey]
+            ?.let { translation ->
+                return translation
+            }
+
+        if (sourceKey in failedSources) {
+            return null
+        }
+
         return runCatching {
             json.decodeFromString<BibleTranslation>(
-                file.readText(Charsets.UTF_8)
+                readText()
             )
         }
             .onSuccess { translation ->
-                cache[translation.id] = translation
+                sourceCache[sourceKey] = translation
+
+                if (translation.id !in cache) {
+                    cache[translation.id] = translation
+                }
             }
             .onFailure { error ->
-                println("[Bible] Failed to load ${file.absolutePath}: " + error.message)
+                failedSources += sourceKey
+                println("[Bible] Failed to load $sourceDescription: " + error.message)
             }
             .getOrNull()
     }
@@ -108,6 +176,9 @@ class JsonBibleRepository(
                 )
             }
             ?.toList()
+            ?.sortedBy { file ->
+                file.name.lowercase()
+            }
             .orEmpty()
     }
 
