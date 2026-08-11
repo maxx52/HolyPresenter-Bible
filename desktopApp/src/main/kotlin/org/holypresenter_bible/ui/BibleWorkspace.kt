@@ -199,7 +199,6 @@ fun BibleWorkspace(
                         anchor = verseNumber
                     )
                 }
-            }
 
             verseSelection = newSelection
             previewVerseNumber = verseNumber
