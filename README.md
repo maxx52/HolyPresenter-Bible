@@ -21,3 +21,19 @@ options:
 ---
 
 Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)…
+
+## Bible data
+
+The module bundles the 66-book Russian Synodal Bible for offline use. The text is public domain and comes from
+[eBible.org](https://ebible.org/find/details.php?id=russyn).
+
+To regenerate the HolyPresenter JSON resource from the reviewed USFM archive:
+
+```shell
+python tools/import_synodal.py \
+  /path/to/russyn_usfm.zip \
+  desktopApp/src/main/resources/bible/translations/synodal.json
+```
+
+The importer verifies the source archive checksum and the expected book, chapter, and verse counts before writing
+the resource.

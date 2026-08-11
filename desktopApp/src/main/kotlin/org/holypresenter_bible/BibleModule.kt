@@ -7,6 +7,7 @@ import holypresenter.org.platform.api.module.ModuleMetadata
 import holypresenter.org.platform.api.planner.PlannerItemHandlerRegistry
 import org.holypresenter_bible.planner.BiblePlannerItemHandler
 import org.holypresenter_bible.presentation.workspace.BibleWorkspaceState
+import org.holypresenter_bible.repository.BuiltInBibleTranslations
 import org.holypresenter_bible.repository.JsonBibleRepository
 import org.holypresenter_bible.ui.BibleWorkspace
 import java.io.File
@@ -14,7 +15,8 @@ import java.io.File
 class BibleModule : HolyModule {
     private val repository =
         JsonBibleRepository(
-            translationsDirectory = resolveTranslationsDirectory()
+            translationsDirectory = resolveTranslationsDirectory(),
+            bundledTranslationResources = BuiltInBibleTranslations.resources
         )
 
     private val workspaceState = BibleWorkspaceState()
@@ -26,7 +28,7 @@ class BibleModule : HolyModule {
         ModuleMetadata(
             id = "bible",
             name = "Библия",
-            version = "1.0.0",
+            version = "1.1.0",
             apiVersion = "0.6.0",
             author = "HolyPresenter",
             description = "Bible presentation module",
@@ -67,7 +69,8 @@ class BibleModule : HolyModule {
         BibleWorkspace(
             moduleContext = context,
             repository = repository,
-            workspaceState = workspaceState
+            workspaceState = workspaceState,
+            defaultTranslationId = BuiltInBibleTranslations.SYNODAL_ID
         )
     }
 

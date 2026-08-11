@@ -1,0 +1,8 @@
+Russian Synodal Bible
+======================
+
+The bundled Russian Synodal Bible text is public domain.
+
+Source: https://ebible.org/find/details.php?id=russyn
+Source archive: https://ebible.org/Scriptures/russyn_usfm.zip
+Retrieved: 2026-08-11
