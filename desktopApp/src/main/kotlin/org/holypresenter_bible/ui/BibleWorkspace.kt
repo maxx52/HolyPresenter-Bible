@@ -27,10 +27,12 @@ import org.holypresenter.platform.ui.presenter.HolyProjectionPreview
 import org.holypresenter.platform.ui.presenter.HolyProjectionShortcutsHint
 import org.holypresenter_bible.domain.BibleBook
 import org.holypresenter_bible.domain.BibleChapter
+import org.holypresenter_bible.domain.BiblePassage
 import org.holypresenter_bible.domain.BibleReference
 import org.holypresenter_bible.domain.BibleTestament
 import org.holypresenter_bible.domain.BibleTranslation
 import org.holypresenter_bible.planner.BiblePlannerReferenceCodec
+import org.holypresenter_bible.presentation.BibleProjectionContentFactory
 import org.holypresenter_bible.presentation.workspace.BibleWorkspaceState
 import org.holypresenter_bible.repository.BibleRepository
 import java.awt.KeyEventDispatcher
@@ -79,7 +81,7 @@ fun BibleWorkspace(
         mutableStateOf<Int?>(null)
     }
 
-    var hasProjectedPreviewVerse by remember {
+    var hasProjectedSelection by remember {
         mutableStateOf(false)
     }
 
@@ -119,7 +121,7 @@ fun BibleWorkspace(
             )
 
         previewVerseNumber = reference.verseStart
-        hasProjectedPreviewVerse = false
+        hasProjectedSelection = false
 
         showBooks = false
         showChapters = false
@@ -159,6 +161,16 @@ fun BibleWorkspace(
             null
         }
 
+    val selectedPassage =
+        remember(
+            repository,
+            selectedReference
+        ) {
+            selectedReference?.let { reference ->
+                repository.getPassage(reference)
+            }
+        }
+
     val plannerService =
         remember(moduleContext) {
             moduleContext.services.get(
@@ -173,7 +185,7 @@ fun BibleWorkspace(
             )
         }
 
-    val showVerse: (
+    val selectAndShowVerse: (
         verseNumber: Int,
         extendSelection: Boolean
     ) -> Unit = { verseNumber, extendSelection ->
@@ -201,15 +213,14 @@ fun BibleWorkspace(
             verseSelection = newSelection
             previewVerseNumber = verseNumber
 
-            hasProjectedPreviewVerse =
-                showBibleVerseOnProjector(
+            hasProjectedSelection =
+                showBibleSelectionOnProjector(
                     projectionService = projectionService,
                     repository = repository,
                     translation = translation,
                     book = book,
                     chapter = chapter,
-                    selection = newSelection,
-                    verseNumber = verseNumber
+                    selection = newSelection
                 )
         }
     }
@@ -225,10 +236,10 @@ fun BibleWorkspace(
         rememberUpdatedState(previewVerseNumber)
     val latestProjectionService =
         rememberUpdatedState(projectionService)
-    val latestHasProjectedPreviewVerse =
-        rememberUpdatedState(hasProjectedPreviewVerse)
-    val latestShowVerse =
-        rememberUpdatedState(showVerse)
+    val latestHasProjectedSelection =
+        rememberUpdatedState(hasProjectedSelection)
+    val latestSelectAndShowVerse =
+        rememberUpdatedState(selectAndShowVerse)
 
     DisposableEffect(Unit) {
         val keyboardManager =
@@ -265,10 +276,10 @@ fun BibleWorkspace(
                     ?.isOpen == true
 
             if (
-                !latestHasProjectedPreviewVerse.value ||
+                !latestHasProjectedSelection.value ||
                 !projectionIsOpen
             ) {
-                latestShowVerse.value(
+                latestSelectAndShowVerse.value(
                     currentVerseNumber,
                     false
                 )
@@ -281,7 +292,7 @@ fun BibleWorkspace(
                 )
                     ?: return true
 
-            latestShowVerse.value(
+            latestSelectAndShowVerse.value(
                 targetVerse.number,
                 false
             )
@@ -372,7 +383,7 @@ fun BibleWorkspace(
                     selectedChapter = null
                     verseSelection = null
                     previewVerseNumber = null
-                    hasProjectedPreviewVerse = false
+                    hasProjectedSelection = false
                     showBooks = true
                     showChapters = false
                 }
@@ -427,7 +438,7 @@ fun BibleWorkspace(
                             selectedChapter = null
                             verseSelection = null
                             previewVerseNumber = null
-                            hasProjectedPreviewVerse = false
+                            hasProjectedSelection = false
                             showBooks = false
                             showChapters = true
                         },
@@ -445,7 +456,7 @@ fun BibleWorkspace(
                             selectedChapter = chapter
                             verseSelection = null
                             previewVerseNumber = null
-                            hasProjectedPreviewVerse = false
+                            hasProjectedSelection = false
                             showBooks = false
                             showChapters = false
                         },
@@ -459,9 +470,10 @@ fun BibleWorkspace(
                     BiblePassageWorkspace(
                         book = selectedBook!!,
                         chapter = selectedChapter!!,
+                        passage = selectedPassage,
                         selection = verseSelection,
                         previewVerseNumber = previewVerseNumber,
-                        onVerseClick = showVerse,
+                        onVerseClick = selectAndShowVerse,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -868,6 +880,7 @@ private fun ChapterTile(
 private fun BiblePassageWorkspace(
     book: BibleBook,
     chapter: BibleChapter,
+    passage: BiblePassage?,
     selection: BibleVerseSelection?,
     previewVerseNumber: Int?,
     onVerseClick: (
@@ -876,9 +889,17 @@ private fun BiblePassageWorkspace(
     ) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val previewVerse =
-        chapter.verses.firstOrNull {
-            it.number == previewVerseNumber
+    val previewContent =
+        remember(
+            passage,
+            book.abbreviation
+        ) {
+            passage?.let { selectedPassage ->
+                BibleProjectionContentFactory.create(
+                    passage = selectedPassage,
+                    bookAbbreviation = book.abbreviation
+                )
+            }
         }
 
     Row(
@@ -918,11 +939,10 @@ private fun BiblePassageWorkspace(
                 shape = MaterialTheme.shapes.large,
                 tonalElevation = 2.dp
             ) {
-                if (previewVerse != null) {
+                if (previewContent != null) {
                     HolyProjectionPreview(
-                        text = previewVerse.text,
-                        caption =
-                            "${book.abbreviation}. ${chapter.number}:${previewVerse.number}",
+                        text = previewContent.text,
+                        caption = previewContent.reference,
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {

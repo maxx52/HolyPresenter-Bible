@@ -25,6 +25,7 @@ dependencies {
         exclude(group = "androidx.compose.foundation")
         exclude(group = "androidx.compose.ui")
     }
+    testImplementation(kotlin("test"))
 }
 
 tasks.withType<Jar>().configureEach {

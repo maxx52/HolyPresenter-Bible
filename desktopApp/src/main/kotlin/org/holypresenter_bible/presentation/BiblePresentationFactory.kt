@@ -17,50 +17,38 @@ class BiblePresentationFactory {
         passage: BiblePassage,
         bookAbbreviation: String
     ): Presentation {
-        val reference = passage.reference
-
-        val presentationTitle =
-            formatReference(
-                bookAbbreviation = bookAbbreviation,
-                chapter = reference.chapter,
-                verseStart = reference.verseStart,
-                verseEnd = reference.verseEnd
+        val projectionContent =
+            BibleProjectionContentFactory.create(
+                passage = passage,
+                bookAbbreviation = bookAbbreviation
             )
 
         return Presentation(
             id = buildPresentationId(passage),
             metadata =
                 PresentationMetadata(
-                    title = presentationTitle
+                    title = projectionContent.reference
                 ),
             theme = defaultBibleTheme(),
-            slides = passage.verses.map { verse ->
-                val verseReference = "$bookAbbreviation. ${reference.chapter}:${verse.number}"
-
-                PresentationSlide(
-                    id = buildSlideId(
-                            passage = passage,
-                            verseNumber = verse.number
-                        ),
-                    elements =
-                        listOf(
-                            TextElement(
-                                id =
-                                    buildTextElementId(
-                                        passage = passage,
-                                        verseNumber = verse.number
-                                    ),
-                                slot = SlotId("main"),
-                                text =
-                                    buildString {
-                                        append(verse.text)
-                                        append("\n\n")
-                                        append(verseReference)
-                                    }
+            slides =
+                listOf(
+                    PresentationSlide(
+                        id = buildSlideId(passage),
+                        elements =
+                            listOf(
+                                TextElement(
+                                    id = buildTextElementId(passage),
+                                    slot = SlotId("main"),
+                                    text =
+                                        buildString {
+                                            append(projectionContent.text)
+                                            append("\n\n")
+                                            append(projectionContent.reference)
+                                        }
+                                )
                             )
-                        )
+                    )
                 )
-                }
         )
     }
 
@@ -83,22 +71,6 @@ class BiblePresentationFactory {
             overlay = PresentationOverlay(enabled = false)
         )
 
-    private fun formatReference(
-        bookAbbreviation: String,
-        chapter: Int,
-        verseStart: Int,
-        verseEnd: Int
-    ): String {
-        val verses =
-            if (verseStart == verseEnd) {
-                verseStart.toString()
-            } else {
-                "$verseStart–$verseEnd"
-            }
-
-        return "$bookAbbreviation. $chapter:$verses"
-    }
-
     private fun buildPresentationId(
         passage: BiblePassage
     ): String {
@@ -119,12 +91,10 @@ class BiblePresentationFactory {
     }
 
     private fun buildSlideId(
-        passage: BiblePassage,
-        verseNumber: Int
-    ): String = "${buildPresentationId(passage)}-verse-$verseNumber"
+        passage: BiblePassage
+    ): String = "${buildPresentationId(passage)}-passage"
 
     private fun buildTextElementId(
-        passage: BiblePassage,
-        verseNumber: Int
-    ): String = "${buildSlideId(passage, verseNumber)}-text"
+        passage: BiblePassage
+    ): String = "${buildSlideId(passage)}-text"
 }
