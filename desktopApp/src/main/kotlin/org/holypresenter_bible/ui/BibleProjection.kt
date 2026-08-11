@@ -10,19 +10,18 @@ import org.holypresenter_bible.presentation.BiblePresentationFactory
 import org.holypresenter_bible.repository.BibleRepository
 
 /**
- * Отправляет выбранный стих на проектор непосредственно из рабочей области Bible.
+ * Отправляет выбранный отрывок на проектор непосредственно из рабочей области Bible.
  *
  * Состояние проектора остаётся в Platform, а модуль формирует только своё
  * представление отрывка через существующий ProjectionService.
  */
-internal fun showBibleVerseOnProjector(
+internal fun showBibleSelectionOnProjector(
     projectionService: ProjectionService?,
     repository: BibleRepository,
     translation: BibleTranslation,
     book: BibleBook,
     chapter: BibleChapter,
-    selection: BibleVerseSelection,
-    verseNumber: Int
+    selection: BibleVerseSelection
 ): Boolean {
     val service = projectionService ?: return false
 
@@ -36,15 +35,6 @@ internal fun showBibleVerseOnProjector(
         )
 
     val passage = repository.getPassage(reference) ?: return false
-    val slideIndex =
-        passage.verses.indexOfFirst {
-            it.number == verseNumber
-        }
-
-    if (slideIndex < 0) {
-        return false
-    }
-
     service.show(
         ProjectionContent.Slide(
             presentation =
@@ -52,7 +42,7 @@ internal fun showBibleVerseOnProjector(
                     passage = passage,
                     bookAbbreviation = book.abbreviation
                 ),
-            slideIndex = slideIndex
+            slideIndex = 0
         )
     )
 
