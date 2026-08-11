@@ -107,6 +107,17 @@ fun BiblePresenterWorkspace(
         mutableStateOf(0)
     }
 
+    /*
+     * Presenter открывается без автоматического вывода на проектор:
+     * оператор сначала видит выбранный отрывок и сам запускает показ.
+     * Это состояние отделяет такой запуск от обычной навигации по уже
+     * показанным стихам.
+     */
+    var isProjectionStarted by
+    remember(reference) {
+        mutableStateOf(false)
+    }
+
     if (
         passage == null ||
         book == null ||
@@ -155,17 +166,35 @@ fun BiblePresenterWorkspace(
                 slideIndex = safeIndex
             )
         )
+
+        isProjectionStarted = projectionService != null
     }
 
     fun showPreviousSlide() {
+        if (!isProjectionStarted) {
+            showSlide(selectedSlideIndex)
+            return
+        }
+
         showSlide(selectedSlideIndex - 1)
     }
 
     fun showNextSlide() {
+        if (!isProjectionStarted) {
+            showSlide(selectedSlideIndex)
+            return
+        }
+
         showSlide(selectedSlideIndex + 1)
     }
 
     val selectedVerse = verses.getOrNull(selectedSlideIndex)
+
+    LaunchedEffect(projectionState?.value?.visible) {
+        if (projectionState?.value?.visible == false) {
+            isProjectionStarted = false
+        }
+    }
 
     DisposableEffect(
         reference,
@@ -265,8 +294,27 @@ fun BiblePresenterWorkspace(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            Button(
+                enabled =
+                    verses.isNotEmpty() &&
+                    projectionService != null,
+                onClick = {
+                    showSlide(selectedSlideIndex)
+                }
+            ) {
+                Text(
+                    text = if (isProjectionStarted) {
+                        "Показать текущий"
+                    } else {
+                        "Показать на проекторе"
+                    }
+                )
+            }
+
             OutlinedButton(
-                enabled = verses.isNotEmpty(),
+                enabled =
+                    isProjectionStarted &&
+                    selectedSlideIndex > 0,
                 onClick = {
                     showPreviousSlide()
                 }
@@ -275,7 +323,9 @@ fun BiblePresenterWorkspace(
             }
 
             Button(
-                enabled = verses.isNotEmpty(),
+                enabled =
+                    isProjectionStarted &&
+                    selectedSlideIndex < verses.lastIndex,
                 onClick = {
                     showNextSlide()
                 }
