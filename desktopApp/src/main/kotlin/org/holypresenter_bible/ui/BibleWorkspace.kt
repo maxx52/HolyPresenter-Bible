@@ -1,6 +1,7 @@
 package org.holypresenter_bible.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,17 +13,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import holypresenter.org.platform.api.module.ModuleContext
 import holypresenter.org.platform.api.planner.PlannerItem
 import holypresenter.org.platform.api.planner.PlannerReference
 import holypresenter.org.platform.api.planner.PlannerService
-import org.holypresenter.platform.ui.presenter.HolyProjectionPreview
 import org.holypresenter_bible.domain.BibleBook
 import org.holypresenter_bible.domain.BibleChapter
 import org.holypresenter_bible.domain.BiblePassage
@@ -83,6 +85,11 @@ fun BibleWorkspace(
     var previewVerseNumber by remember {
         mutableStateOf<Int?>(null)
     }
+
+    var previewBackground by remember { mutableStateOf(Color.Black) }
+    var previewTextColor by remember { mutableStateOf(Color.White) }
+    var previewScale by remember { mutableStateOf(1f) }
+    var previewTextAlign by remember { mutableStateOf(TextAlign.Center) }
 
     val navigationRequest = workspaceState.navigationRequest
 
@@ -399,6 +406,14 @@ fun BibleWorkspace(
                         selection = verseSelection,
                         previewVerseNumber = previewVerseNumber,
                         onVerseClick = selectAndPreviewVerse,
+                        previewBackground = previewBackground,
+                        previewTextColor = previewTextColor,
+                        previewScale = previewScale,
+                        previewTextAlign = previewTextAlign,
+                        onPreviewBackgroundChange = { previewBackground = it },
+                        onPreviewTextColorChange = { previewTextColor = it },
+                        onPreviewScaleChange = { previewScale = it },
+                        onPreviewTextAlignChange = { previewTextAlign = it },
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -812,6 +827,14 @@ private fun BiblePassageWorkspace(
         verseNumber: Int,
         extendSelection: Boolean
     ) -> Unit,
+    previewBackground: Color,
+    previewTextColor: Color,
+    previewScale: Float,
+    previewTextAlign: TextAlign,
+    onPreviewBackgroundChange: (Color) -> Unit,
+    onPreviewTextColorChange: (Color) -> Unit,
+    onPreviewScaleChange: (Float) -> Unit,
+    onPreviewTextAlignChange: (TextAlign) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val previewContent =
@@ -853,6 +876,16 @@ private fun BiblePassageWorkspace(
                 fontWeight = FontWeight.SemiBold
             )
 
+            Text("Оформление", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AssistChip(onClick = { onPreviewBackgroundChange(if (previewBackground == Color.Black) Color(0xFF24334A) else Color.Black) }, label = { Text("Фон") })
+                AssistChip(onClick = { onPreviewBackgroundChange(Color(0xFF4A284D)) }, label = { Text("Тёплый") })
+                AssistChip(onClick = { onPreviewTextColorChange(if (previewTextColor == Color.White) Color(0xFFFFE9A8) else Color.White) }, label = { Text("Текст") })
+                AssistChip(onClick = { onPreviewTextAlignChange(if (previewTextAlign == TextAlign.Center) TextAlign.Start else TextAlign.Center) }, label = { Text(if (previewTextAlign == TextAlign.Center) "По центру" else "Слева") })
+                Text("Масштаб", modifier = Modifier.align(Alignment.CenterVertically))
+                Slider(value = previewScale, onValueChange = onPreviewScaleChange, valueRange = 0.7f..1.3f, modifier = Modifier.weight(1f))
+            }
+
             Spacer(
                 modifier = Modifier.height(12.dp)
             )
@@ -865,10 +898,13 @@ private fun BiblePassageWorkspace(
                 tonalElevation = 2.dp
             ) {
                 if (previewContent != null) {
-                    HolyProjectionPreview(
+                    BiblePreview(
                         text = previewContent.text,
                         caption = previewContent.reference,
-                        modifier = Modifier.fillMaxSize()
+                        background = previewBackground,
+                        textColor = previewTextColor,
+                        scale = previewScale,
+                        textAlign = previewTextAlign
                     )
                 } else {
                     Box(
@@ -886,6 +922,19 @@ private fun BiblePassageWorkspace(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun BiblePreview(text: String, caption: String, background: Color, textColor: Color, scale: Float, textAlign: TextAlign) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(background).padding(28.dp), contentAlignment = Alignment.Center) {
+        val characters = text.length.coerceAtLeast(1)
+        val autoSize = (56f * scale * (700f / characters).coerceIn(0.42f, 1f)).sp
+        Column(horizontalAlignment = if (textAlign == TextAlign.Center) Alignment.CenterHorizontally else Alignment.Start) {
+            Text(text, color = textColor, fontSize = autoSize, lineHeight = (autoSize.value * 1.2f).sp, textAlign = textAlign, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(18.dp))
+            Text(caption, color = textColor.copy(alpha = .82f), fontSize = (autoSize.value * .62f).sp)
         }
     }
 }
