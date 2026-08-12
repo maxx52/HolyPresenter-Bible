@@ -28,6 +28,14 @@ class JsonBibleRepository(
         ensureTranslationsDirectory()
     }
 
+    override fun importUsfmArchive(archive: File): BibleTranslation {
+        val translation = UsfmTranslationImporter(translationsDirectory).importArchive(archive)
+        sourceCache.clear()
+        failedSources.clear()
+        cache[translation.id] = translation
+        return translation
+    }
+
     override fun getTranslations(): List<BibleTranslation> {
         val bundledTranslations =
             bundledTranslationResources

@@ -53,8 +53,9 @@ fun BibleWorkspace(
     defaultTranslationId: String? = null,
     modifier: Modifier = Modifier
 ) {
+    var translationsVersion by remember { mutableStateOf(0) }
     val translations =
-        remember(repository) {
+        remember(repository, translationsVersion) {
             repository.getTranslations()
         }
 
@@ -123,7 +124,7 @@ fun BibleWorkspace(
             }
             ?: return@LaunchedEffect
 
-        selectedTranslation = translation
+                selectedTranslation = translation
         selectedBook = book
         selectedChapter = chapter
 
@@ -327,6 +328,22 @@ fun BibleWorkspace(
                     previewVerseNumber = null
                     showBooks = true
                     showChapters = false
+                },
+                onImportUsfm = {
+                    selectMediaFile("Импорт перевода USFM", "zip")?.let { path ->
+                        runCatching { repository.importUsfmArchive(File(path)) }
+                            .onSuccess { imported ->
+                                translationsVersion += 1
+                                selectedTranslation = imported
+                                selectedBook = null
+                                selectedChapter = null
+                                verseSelection = null
+                                previewVerseNumber = null
+                                showBooks = true
+                                showChapters = false
+                            }
+                            .onFailure { error -> println("[Bible] USFM import failed: ${error.message}") }
+                    }
                 }
             )
 
@@ -443,7 +460,8 @@ fun BibleWorkspace(
 private fun BibleHeader(
     translations: List<BibleTranslation>,
     selectedTranslation: BibleTranslation?,
-    onTranslationSelected: (BibleTranslation) -> Unit
+    onTranslationSelected: (BibleTranslation) -> Unit,
+    onImportUsfm: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -459,7 +477,8 @@ private fun BibleHeader(
         TranslationSelector(
             translations = translations,
             selectedTranslation = selectedTranslation,
-            onTranslationSelected = onTranslationSelected
+            onTranslationSelected = onTranslationSelected,
+            onImportUsfm = onImportUsfm
         )
     }
 }
@@ -468,7 +487,8 @@ private fun BibleHeader(
 private fun TranslationSelector(
     translations: List<BibleTranslation>,
     selectedTranslation: BibleTranslation?,
-    onTranslationSelected: (BibleTranslation) -> Unit
+    onTranslationSelected: (BibleTranslation) -> Unit,
+    onImportUsfm: () -> Unit
 ) {
     var expanded by remember {
         mutableStateOf(false)
@@ -511,6 +531,14 @@ private fun TranslationSelector(
                     }
                 )
             }
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text("Импортировать перевод USFM…") },
+                onClick = {
+                    expanded = false
+                    onImportUsfm()
+                }
+            )
         }
     }
 }
