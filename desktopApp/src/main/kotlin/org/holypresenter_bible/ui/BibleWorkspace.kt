@@ -19,6 +19,7 @@ import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import holypresenter.org.platform.api.module.ModuleContext
@@ -927,14 +928,50 @@ private fun BiblePassageWorkspace(
 }
 
 @Composable
-private fun BiblePreview(text: String, caption: String, background: Color, textColor: Color, scale: Float, textAlign: TextAlign) {
-    BoxWithConstraints(Modifier.fillMaxSize().background(background).padding(28.dp), contentAlignment = Alignment.Center) {
-        val characters = text.length.coerceAtLeast(1)
-        val autoSize = (56f * scale * (700f / characters).coerceIn(0.42f, 1f)).sp
-        Column(horizontalAlignment = if (textAlign == TextAlign.Center) Alignment.CenterHorizontally else Alignment.Start) {
-            Text(text, color = textColor, fontSize = autoSize, lineHeight = (autoSize.value * 1.2f).sp, textAlign = textAlign, fontWeight = FontWeight.SemiBold)
+private fun BiblePreview(
+    text: String,
+    caption: String,
+    background: Color,
+    textColor: Color,
+    scale: Float,
+    textAlign: TextAlign
+) {
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize().background(background).padding(28.dp)
+    ) {
+        val maximumSize = 56f * scale
+        var fontSize by remember(text, maxWidth, maxHeight, scale) {
+            mutableStateOf(maximumSize)
+        }
+        val minimumSize = 14f
+
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment =
+                if (textAlign == TextAlign.Center) Alignment.CenterHorizontally else Alignment.Start
+        ) {
+            Text(
+                text = text,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                color = textColor,
+                fontSize = fontSize.sp,
+                lineHeight = (fontSize * 1.2f).sp,
+                textAlign = textAlign,
+                fontWeight = FontWeight.SemiBold,
+                overflow = TextOverflow.Clip,
+                onTextLayout = { layout ->
+                    if (layout.hasVisualOverflow && fontSize > minimumSize) {
+                        fontSize = (fontSize - 1f).coerceAtLeast(minimumSize)
+                    }
+                }
+            )
+
             Spacer(Modifier.height(18.dp))
-            Text(caption, color = textColor.copy(alpha = .82f), fontSize = (autoSize.value * .62f).sp)
+            Text(
+                text = caption,
+                color = textColor.copy(alpha = .82f),
+                fontSize = (fontSize * .62f).coerceAtLeast(14f).sp
+            )
         }
     }
 }
