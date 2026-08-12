@@ -1,7 +1,6 @@
 package org.holypresenter_bible.ui
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -15,7 +14,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -929,7 +927,7 @@ private fun BiblePassageWorkspace(
                         textColor = previewTextColor,
                         textAlign = previewTextAlign,
                         backgroundImagePath = previewBackgroundImagePath,
-                        fontFamily = FontFamily(previewFontFamilyName)
+                        fontFamilyName = previewFontFamilyName
                     )
                 } else {
                     Box(
@@ -959,19 +957,16 @@ private fun BiblePreview(
     textColor: Color,
     textAlign: TextAlign,
     backgroundImagePath: String?,
-    fontFamily: FontFamily
+    fontFamilyName: String
 ) {
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize().background(background).padding(28.dp)
     ) {
-        val backgroundImage = remember(backgroundImagePath) {
-            backgroundImagePath?.let { path -> runCatching { ImageIO.read(File(path)).asImageBitmap() }.getOrNull() }
-        }
-        backgroundImage?.let { image ->
-            Image(image, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+        val hasBackgroundImage = remember(backgroundImagePath) {
+            backgroundImagePath?.let { path -> File(path).isFile } == true
         }
         val maximumSize = 56f
-        var fontSize by remember(text, maxWidth, maxHeight, fontFamily) {
+        var fontSize by remember(text, maxWidth, maxHeight, fontFamilyName) {
             mutableStateOf(maximumSize)
         }
         val minimumSize = 14f
@@ -989,7 +984,7 @@ private fun BiblePreview(
                 lineHeight = (fontSize * 1.2f).sp,
                 textAlign = textAlign,
                 fontWeight = FontWeight.SemiBold,
-                fontFamily = fontFamily,
+                fontFamily = FontFamily(fontFamilyName),
                 overflow = TextOverflow.Clip,
                 onTextLayout = { layout ->
                     if (layout.hasVisualOverflow && fontSize > minimumSize) {
@@ -1002,8 +997,17 @@ private fun BiblePreview(
             Text(
                 text = caption,
                 color = textColor.copy(alpha = .82f),
-                fontSize = (fontSize * .62f).coerceAtLeast(14f).sp
+                fontSize = (fontSize * .62f).coerceAtLeast(14f).sp,
+                fontFamily = FontFamily(fontFamilyName)
             )
+
+            if (hasBackgroundImage) {
+                Text(
+                    text = "Фоновое изображение будет показано на экране проектора",
+                    color = textColor.copy(alpha = .55f),
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
         }
     }
 }
