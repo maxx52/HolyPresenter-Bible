@@ -92,12 +92,11 @@ fun BibleWorkspace(
         mutableStateOf<Int?>(null)
     }
 
-    var previewBackground by remember { mutableStateOf(Color.Black) }
-    var previewTextColor by remember { mutableStateOf(Color.White) }
-    var previewTextAlign by remember { mutableStateOf(TextAlign.Center) }
-    var previewBackgroundImagePath by remember { mutableStateOf<String?>(null) }
-    var previewVideoPath by remember { mutableStateOf<String?>(null) }
-    var previewFontFamilyName by remember { mutableStateOf("SansSerif") }
+    var displaySettings by remember { mutableStateOf(BibleDisplaySettingsStorage.load()) }
+
+    LaunchedEffect(displaySettings) {
+        BibleDisplaySettingsStorage.save(displaySettings)
+    }
 
     val navigationRequest = workspaceState.navigationRequest
 
@@ -422,18 +421,13 @@ fun BibleWorkspace(
                         selection = verseSelection,
                         previewVerseNumber = previewVerseNumber,
                         onVerseClick = selectAndPreviewVerse,
-                        previewBackground = previewBackground,
-                        previewTextColor = previewTextColor,
-                        previewTextAlign = previewTextAlign,
-                        previewBackgroundImagePath = previewBackgroundImagePath,
-                        previewVideoPath = previewVideoPath,
-                        previewFontFamilyName = previewFontFamilyName,
-                        onPreviewBackgroundChange = { previewBackground = it },
-                        onPreviewTextColorChange = { previewTextColor = it },
-                        onPreviewTextAlignChange = { previewTextAlign = it },
-                        onPreviewBackgroundImageChange = { previewBackgroundImagePath = it },
-                        onPreviewVideoChange = { previewVideoPath = it },
-                        onPreviewFontFamilyChange = { previewFontFamilyName = it },
+                        displaySettings = displaySettings,
+                        onDisplaySettingsChange = { displaySettings = it },
+                        onAddToPlanner = {
+                            val reference = selectedReference ?: return@BiblePassageWorkspace
+                            val title = selectedReferenceTitle ?: return@BiblePassageWorkspace
+                            plannerService?.add(PlannerItem.Generic(PlannerReference("bible", BiblePlannerReferenceCodec.encode(reference)), title))
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -441,38 +435,6 @@ fun BibleWorkspace(
                 }
             }
 
-            if (
-                !showBooks &&
-                !showChapters &&
-                selectedBook != null &&
-                selectedChapter != null &&
-                verseSelection != null
-            ) {
-                Spacer(
-                    modifier = Modifier.height(12.dp)
-                )
-
-                BibleSelectionBar(
-                    book = selectedBook!!,
-                    chapter = selectedChapter!!,
-                    selection = verseSelection!!,
-                    onAddToPlanner = {
-                        val reference = selectedReference ?: return@BibleSelectionBar
-                        val title = selectedReferenceTitle ?: return@BibleSelectionBar
-
-                        plannerService?.add(
-                            PlannerItem.Generic(
-                                reference =
-                                    PlannerReference(
-                                        moduleId = "bible",
-                                        itemId = BiblePlannerReferenceCodec.encode(reference)
-                                    ),
-                                title = title
-                            )
-                        )
-                    }
-                )
-            }
         }
     }
 }
@@ -847,18 +809,9 @@ private fun BiblePassageWorkspace(
         verseNumber: Int,
         extendSelection: Boolean
     ) -> Unit,
-    previewBackground: Color,
-    previewTextColor: Color,
-    previewTextAlign: TextAlign,
-    previewBackgroundImagePath: String?,
-    previewVideoPath: String?,
-    previewFontFamilyName: String,
-    onPreviewBackgroundChange: (Color) -> Unit,
-    onPreviewTextColorChange: (Color) -> Unit,
-    onPreviewTextAlignChange: (TextAlign) -> Unit,
-    onPreviewBackgroundImageChange: (String?) -> Unit,
-    onPreviewVideoChange: (String?) -> Unit,
-    onPreviewFontFamilyChange: (String) -> Unit,
+    displaySettings: BibleDisplaySettings,
+    onDisplaySettingsChange: (BibleDisplaySettings) -> Unit,
+    onAddToPlanner: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val previewContent =
@@ -878,16 +831,28 @@ private fun BiblePassageWorkspace(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        VerseList(
-            book = book,
-            chapter = chapter,
-            selection = selection,
-            previewVerseNumber = previewVerseNumber,
-            onVerseClick = onVerseClick,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-        )
+        Column(
+            modifier = Modifier.weight(1f).fillMaxHeight()
+        ) {
+            VerseList(
+                book = book,
+                chapter = chapter,
+                selection = selection,
+                previewVerseNumber = previewVerseNumber,
+                onVerseClick = onVerseClick,
+                modifier = Modifier.weight(1f)
+            )
+
+            if (selection != null) {
+                Spacer(Modifier.height(12.dp))
+                BibleSelectionBar(
+                    book = book,
+                    chapter = chapter,
+                    selection = selection,
+                    onAddToPlanner = onAddToPlanner
+                )
+            }
+        }
 
         Column(
             modifier = Modifier
@@ -902,23 +867,21 @@ private fun BiblePassageWorkspace(
 
             Text("Оформление", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AssistChip(onClick = { onPreviewBackgroundChange(if (previewBackground == Color.Black) Color(0xFF24334A) else Color.Black) }, label = { Text("Фон") })
-                AssistChip(onClick = { onPreviewBackgroundChange(Color(0xFF4A284D)) }, label = { Text("Тёплый") })
-                AssistChip(onClick = { onPreviewTextColorChange(if (previewTextColor == Color.White) Color(0xFFFFE9A8) else Color.White) }, label = { Text("Текст") })
-                AssistChip(onClick = { onPreviewTextAlignChange(if (previewTextAlign == TextAlign.Center) TextAlign.Start else TextAlign.Center) }, label = { Text(if (previewTextAlign == TextAlign.Center) "По центру" else "Слева") })
-                AssistChip(onClick = { selectMediaFile("Изображение фона", "jpg", "jpeg", "png", "webp")?.let(onPreviewBackgroundImageChange) }, label = { Text("Картинка") })
-                AssistChip(onClick = { selectMediaFile("Видео фона", "mp4", "mov", "mkv")?.let(onPreviewVideoChange) }, label = { Text("Видео") })
+                AssistChip(onClick = { onDisplaySettingsChange(displaySettings.copy(background = if (displaySettings.background == Color.Black) Color(0xFF24334A) else Color.Black)) }, label = { Text("Фон") })
+                AssistChip(onClick = { onDisplaySettingsChange(displaySettings.copy(background = Color(0xFF4A284D))) }, label = { Text("Тёплый") })
+                AssistChip(onClick = { onDisplaySettingsChange(displaySettings.copy(textColor = if (displaySettings.textColor == Color.White) Color(0xFFFFE9A8) else Color.White)) }, label = { Text("Текст") })
+                AssistChip(onClick = { onDisplaySettingsChange(displaySettings.copy(textAlign = if (displaySettings.textAlign == TextAlign.Center) TextAlign.Start else TextAlign.Center)) }, label = { Text(if (displaySettings.textAlign == TextAlign.Center) "По центру" else "Слева") })
+                AssistChip(onClick = { selectMediaFile("Изображение фона", "jpg", "jpeg", "png", "webp")?.let { onDisplaySettingsChange(displaySettings.copy(backgroundImagePath = it)) } }, label = { Text("Картинка") })
+                AssistChip(onClick = { selectMediaFile("Видео фона", "mp4", "mov", "mkv")?.let { onDisplaySettingsChange(displaySettings.copy(videoPath = it)) } }, label = { Text("Видео") })
             }
             FontFamilySelector(
-                selectedName = previewFontFamilyName,
-                onSelected = onPreviewFontFamilyChange
+                selectedName = displaySettings.fontFamilyName,
+                onSelected = { onDisplaySettingsChange(displaySettings.copy(fontFamilyName = it)) }
             )
-            previewBackgroundImagePath?.let { Text("Фон: ${File(it).name}", style = MaterialTheme.typography.labelSmall) }
-            previewVideoPath?.let { Text("Видео: ${File(it).name}", style = MaterialTheme.typography.labelSmall) }
+            displaySettings.backgroundImagePath?.let { Text("Фон: ${File(it).name}", style = MaterialTheme.typography.labelSmall) }
+            displaySettings.videoPath?.let { Text("Видео: ${File(it).name}", style = MaterialTheme.typography.labelSmall) }
 
-            Spacer(
-                modifier = Modifier.height(12.dp)
-            )
+            Spacer(Modifier.height(16.dp))
 
             Surface(
                 modifier = Modifier
@@ -931,11 +894,11 @@ private fun BiblePassageWorkspace(
                     BiblePreview(
                         text = previewContent.text,
                         caption = previewContent.reference,
-                        background = previewBackground,
-                        textColor = previewTextColor,
-                        textAlign = previewTextAlign,
-                        backgroundImagePath = previewBackgroundImagePath,
-                        fontFamilyName = previewFontFamilyName
+                        background = displaySettings.background,
+                        textColor = displaySettings.textColor,
+                        textAlign = displaySettings.textAlign,
+                        backgroundImagePath = displaySettings.backgroundImagePath,
+                        fontFamilyName = displaySettings.fontFamilyName
                     )
                 } else {
                     Box(
