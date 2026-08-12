@@ -351,8 +351,16 @@ fun BibleWorkspace(
                     showChapters = false
                 },
                 onBookClick = {
-                    showBooks = true
-                    showChapters = false
+                    if (selectedBook != null) {
+                        selectedChapter = null
+                        verseSelection = null
+                        previewVerseNumber = null
+                        showBooks = false
+                        showChapters = true
+                    } else {
+                        showBooks = true
+                        showChapters = false
+                    }
                 },
                 onChapterClick = {
                     showBooks = false
