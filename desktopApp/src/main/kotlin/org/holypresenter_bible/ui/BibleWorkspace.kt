@@ -1,6 +1,7 @@
 package org.holypresenter_bible.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -14,10 +15,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -39,6 +42,10 @@ import org.holypresenter_bible.repository.BibleRepository
 import java.awt.KeyEventDispatcher
 import java.awt.KeyboardFocusManager
 import java.awt.event.KeyEvent
+import java.io.File
+import javax.imageio.ImageIO
+import javax.swing.JFileChooser
+import javax.swing.filechooser.FileNameExtensionFilter
 
 @Composable
 fun BibleWorkspace(
@@ -89,8 +96,10 @@ fun BibleWorkspace(
 
     var previewBackground by remember { mutableStateOf(Color.Black) }
     var previewTextColor by remember { mutableStateOf(Color.White) }
-    var previewScale by remember { mutableStateOf(1f) }
     var previewTextAlign by remember { mutableStateOf(TextAlign.Center) }
+    var previewBackgroundImagePath by remember { mutableStateOf<String?>(null) }
+    var previewVideoPath by remember { mutableStateOf<String?>(null) }
+    var previewFontFamilyName by remember { mutableStateOf("SansSerif") }
 
     val navigationRequest = workspaceState.navigationRequest
 
@@ -409,12 +418,16 @@ fun BibleWorkspace(
                         onVerseClick = selectAndPreviewVerse,
                         previewBackground = previewBackground,
                         previewTextColor = previewTextColor,
-                        previewScale = previewScale,
                         previewTextAlign = previewTextAlign,
+                        previewBackgroundImagePath = previewBackgroundImagePath,
+                        previewVideoPath = previewVideoPath,
+                        previewFontFamilyName = previewFontFamilyName,
                         onPreviewBackgroundChange = { previewBackground = it },
                         onPreviewTextColorChange = { previewTextColor = it },
-                        onPreviewScaleChange = { previewScale = it },
                         onPreviewTextAlignChange = { previewTextAlign = it },
+                        onPreviewBackgroundImageChange = { previewBackgroundImagePath = it },
+                        onPreviewVideoChange = { previewVideoPath = it },
+                        onPreviewFontFamilyChange = { previewFontFamilyName = it },
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -830,12 +843,16 @@ private fun BiblePassageWorkspace(
     ) -> Unit,
     previewBackground: Color,
     previewTextColor: Color,
-    previewScale: Float,
     previewTextAlign: TextAlign,
+    previewBackgroundImagePath: String?,
+    previewVideoPath: String?,
+    previewFontFamilyName: String,
     onPreviewBackgroundChange: (Color) -> Unit,
     onPreviewTextColorChange: (Color) -> Unit,
-    onPreviewScaleChange: (Float) -> Unit,
     onPreviewTextAlignChange: (TextAlign) -> Unit,
+    onPreviewBackgroundImageChange: (String?) -> Unit,
+    onPreviewVideoChange: (String?) -> Unit,
+    onPreviewFontFamilyChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val previewContent =
@@ -883,9 +900,15 @@ private fun BiblePassageWorkspace(
                 AssistChip(onClick = { onPreviewBackgroundChange(Color(0xFF4A284D)) }, label = { Text("Тёплый") })
                 AssistChip(onClick = { onPreviewTextColorChange(if (previewTextColor == Color.White) Color(0xFFFFE9A8) else Color.White) }, label = { Text("Текст") })
                 AssistChip(onClick = { onPreviewTextAlignChange(if (previewTextAlign == TextAlign.Center) TextAlign.Start else TextAlign.Center) }, label = { Text(if (previewTextAlign == TextAlign.Center) "По центру" else "Слева") })
-                Text("Масштаб", modifier = Modifier.align(Alignment.CenterVertically))
-                Slider(value = previewScale, onValueChange = onPreviewScaleChange, valueRange = 0.7f..1.3f, modifier = Modifier.weight(1f))
+                AssistChip(onClick = { selectMediaFile("Изображение фона", "jpg", "jpeg", "png", "webp")?.let(onPreviewBackgroundImageChange) }, label = { Text("Картинка") })
+                AssistChip(onClick = { selectMediaFile("Видео фона", "mp4", "mov", "mkv")?.let(onPreviewVideoChange) }, label = { Text("Видео") })
             }
+            FontFamilySelector(
+                selectedName = previewFontFamilyName,
+                onSelected = onPreviewFontFamilyChange
+            )
+            previewBackgroundImagePath?.let { Text("Фон: ${File(it).name}", style = MaterialTheme.typography.labelSmall) }
+            previewVideoPath?.let { Text("Видео: ${File(it).name}", style = MaterialTheme.typography.labelSmall) }
 
             Spacer(
                 modifier = Modifier.height(12.dp)
@@ -904,8 +927,9 @@ private fun BiblePassageWorkspace(
                         caption = previewContent.reference,
                         background = previewBackground,
                         textColor = previewTextColor,
-                        scale = previewScale,
-                        textAlign = previewTextAlign
+                        textAlign = previewTextAlign,
+                        backgroundImagePath = previewBackgroundImagePath,
+                        fontFamily = FontFamily(previewFontFamilyName)
                     )
                 } else {
                     Box(
@@ -933,14 +957,21 @@ private fun BiblePreview(
     caption: String,
     background: Color,
     textColor: Color,
-    scale: Float,
-    textAlign: TextAlign
+    textAlign: TextAlign,
+    backgroundImagePath: String?,
+    fontFamily: FontFamily
 ) {
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize().background(background).padding(28.dp)
     ) {
-        val maximumSize = 56f * scale
-        var fontSize by remember(text, maxWidth, maxHeight, scale) {
+        val backgroundImage = remember(backgroundImagePath) {
+            backgroundImagePath?.let { path -> runCatching { ImageIO.read(File(path)).asImageBitmap() }.getOrNull() }
+        }
+        backgroundImage?.let { image ->
+            Image(image, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+        }
+        val maximumSize = 56f
+        var fontSize by remember(text, maxWidth, maxHeight, fontFamily) {
             mutableStateOf(maximumSize)
         }
         val minimumSize = 14f
@@ -958,6 +989,7 @@ private fun BiblePreview(
                 lineHeight = (fontSize * 1.2f).sp,
                 textAlign = textAlign,
                 fontWeight = FontWeight.SemiBold,
+                fontFamily = fontFamily,
                 overflow = TextOverflow.Clip,
                 onTextLayout = { layout ->
                     if (layout.hasVisualOverflow && fontSize > minimumSize) {
@@ -973,6 +1005,62 @@ private fun BiblePreview(
                 fontSize = (fontSize * .62f).coerceAtLeast(14f).sp
             )
         }
+    }
+}
+
+@Composable
+private fun FontFamilySelector(
+    selectedName: String,
+    onSelected: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val availableFamilies =
+        remember {
+            java.awt.GraphicsEnvironment
+                .getLocalGraphicsEnvironment()
+                .availableFontFamilyNames
+                .sorted()
+        }
+
+    Row(
+        modifier = Modifier.padding(top = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("Шрифт", style = MaterialTheme.typography.labelLarge)
+        Box {
+            OutlinedButton(onClick = { expanded = true }) {
+                Text(selectedName)
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                availableFamilies.forEach { familyName ->
+                    DropdownMenuItem(
+                        text = { Text(familyName) },
+                        onClick = {
+                            onSelected(familyName)
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun selectMediaFile(
+    title: String,
+    vararg extensions: String
+): String? {
+    val chooser = JFileChooser().apply {
+        dialogTitle = title
+        isAcceptAllFileFilterUsed = false
+        fileFilter = FileNameExtensionFilter(title, *extensions)
+    }
+
+    return if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
+        chooser.selectedFile.absolutePath
+    } else {
+        null
     }
 }
 
